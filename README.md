@@ -1,5 +1,22 @@
 # AI Agentic Tools Template
 
+## Retail AI chat extraction
+
+The React/Vite chat extraction is in [`retail-chat`](./retail-chat). It keeps
+the original project's React 19, Vite 7, and Tailwind CSS 4 stack while reducing
+the UI to a focused chat page with dropdown-driven model, mode, company, and
+year controls.
+
+```bash
+cd retail-chat
+npm install
+npm run dev
+```
+
+Add an OpenRouter API key through the page's **Settings** menu. Keys are stored
+in browser local storage for this standalone demo; a production deployment
+should proxy model requests through a backend.
+
 A minimal starting point for working with AI coding assistants in a dev container. The container image comes pre-loaded with all tools — this repo only needs the config files to get everything running.
 
 ---
