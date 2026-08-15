@@ -2,75 +2,74 @@
   grid-template-columns: var(--sidebar-width, 220px) 5px minmax(0, 1fr);
 }
 
-.sidebar {
-  min-width: 0;
-  overflow: auto;
-}
-
 .sidebar-tabs {
   display: flex;
-  gap: 2px;
+  gap: 3px;
   overflow-x: auto;
-  padding-bottom: 1px;
-  border-bottom: 1px solid #3b5347;
+  padding: 3px;
+}
+
+.sidebar-tab {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
 }
 
 .sidebar-tabs button {
   flex: 0 0 auto;
+}
+
+.sidebar-tab > button[role="tab"] {
+  height: 26px;
+  padding: 0 6px 0 9px;
   border: 0;
-  border-radius: 7px 7px 0 0;
-  padding: 8px 11px;
   background: transparent;
-  color: #a8b8af;
-  font-size: 12px;
-  cursor: pointer;
 }
 
-.sidebar-tabs button:hover {
-  color: #f2f8f4;
-  background: #20372c;
+.sidebar-tabs .remove-tab {
+  display: grid;
+  width: 0;
+  height: 20px;
+  padding: 0;
+  overflow: hidden;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  transition: width .15s, opacity .15s;
 }
 
-.sidebar-tabs button.active {
-  color: #fff;
-  background: #2d4b3c;
-  box-shadow: inset 0 -2px #55b68a;
+.sidebar-tab:hover .remove-tab,
+.sidebar-tab.active .remove-tab,
+.sidebar-tabs .remove-tab:focus-visible {
+  width: 20px;
+  opacity: 1;
 }
 
-.sidebar-tabs button:focus-visible {
-  outline: 2px solid #78d0a8;
-  outline-offset: -2px;
+.sidebar-tabs .remove-tab svg {
+  width: 12px;
+  height: 12px;
 }
 
 .sidebar-tabs .add-tab {
-  min-width: 32px;
-  padding-inline: 9px;
-  color: #dce8e1;
-  font-size: 18px;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
   line-height: 1;
 }
 
 .sidebar-tabs .tab-name-input {
   width: 78px;
   min-width: 62px;
-  border: 1px solid #78d0a8;
-  border-radius: 6px 6px 0 0;
-  padding: 6px 8px;
-  outline: none;
-  background: #f5faf7;
-  color: #17211b;
-  font-size: 12px;
-}
-
-.tab-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  height: 26px;
+  padding: 0 7px;
 }
 
 .sidebar-resizer {
   position: relative;
-  background: #14251d;
   cursor: col-resize;
   touch-action: none;
   outline: none;
@@ -80,13 +79,12 @@
   content: "";
   position: absolute;
   inset: 0 1px;
-  background: #55b68a;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity .15s;
 }
 
 .sidebar-resizer:hover::after,
-.sidebar-resizer:focus::after,
+.sidebar-resizer:focus-visible::after,
 .resizing-sidebar .sidebar-resizer::after {
   opacity: 1;
 }
@@ -98,21 +96,10 @@
 
 @media (max-width: 760px) {
   .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar-resizer {
     display: none;
-  }
-
-  .sidebar {
-    grid-template-columns: 1fr;
-  }
-
-  .tab-panel {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
   }
 }
