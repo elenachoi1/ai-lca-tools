@@ -16,6 +16,19 @@ const MENU_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'show_tab',
+      description: 'Switch the visible left-panel tab. Use this when the user asks to show, open, view, or go to a tab.',
+      parameters: {
+        type: 'object',
+        properties: { tab: { type: 'string', description: 'Tab name to show, such as Tab 3.' } },
+        required: ['tab'],
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_menu_selections',
       description: 'Get the color and size selected in a specific tab. Omit tab to read the active tab.',
       parameters: { type: 'object', properties: { tab: { type: 'string', description: 'Tab name, such as Tab 2.' } }, additionalProperties: false }
@@ -153,6 +166,11 @@ export default function App() {
       return match
     }
     return {
+    show_tab: args => {
+      const tab = resolveTab(args.tab)
+      setActiveTab(tab)
+      return { success: true, activeTab: tab }
+    },
     get_menu_selections: args => {
       const tab = resolveTab(args.tab)
       return { tab, ...(tabSelections[tab] || { color: COLORS[0], size: SIZES[0] }) }
@@ -176,7 +194,7 @@ export default function App() {
     }
   }}, [activeTab, tabs, tabSelections])
   const tabSummary = tabs.map(tab => `${tab}: ${tabSelections[tab]?.color || COLORS[0]}, ${tabSelections[tab]?.size || SIZES[0]}`).join('; ')
-  const systemPrompt = `You are a concise assistant. ${contextOn ? `The active tab is ${activeTab}. Tab selections are: ${tabSummary}. A request naming a tab applies only to that tab. A request without a tab applies only to the active tab. Use the menu tools to make changes.` : ''}`
+  const systemPrompt = `You are a concise assistant. ${contextOn ? `The active tab is ${activeTab}. Tab selections are: ${tabSummary}. A request to show, open, view, or go to a tab must use show_tab. A request naming a tab applies only to that tab. A request without a tab applies only to the active tab. Use the menu tools to make changes.` : ''}`
   const save = finished => {
     if (!finished.some(m => m.role === 'user')) return
     const id = currentId || crypto.randomUUID(), chatTitle = finished.find(m => m.role === 'user').content.slice(0, 60)
