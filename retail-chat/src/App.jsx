@@ -16,18 +16,19 @@ const MENU_TOOLS = [
     type: 'function',
     function: {
       name: 'get_menu_selections',
-      description: 'Get the color and size currently selected in the left menus.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false }
+      description: 'Get the color and size selected in a specific tab. Omit tab to read the active tab.',
+      parameters: { type: 'object', properties: { tab: { type: 'string', description: 'Tab name, such as Tab 2.' } }, additionalProperties: false }
     }
   },
   {
     type: 'function',
     function: {
       name: 'set_menu_selections',
-      description: 'Change one or both of the color and size selections in the left menus.',
+      description: 'Change one or both selections in exactly one tab. Omit tab to change only the active tab.',
       parameters: {
         type: 'object',
         properties: {
+          tab: { type: 'string', description: 'Tab name to update, such as Tab 2. Defaults to the active tab.' },
           color: { type: 'string', enum: COLORS },
           size: { type: 'string', enum: SIZES }
         },
@@ -42,11 +43,13 @@ function loadJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(
 
 export default function App() {
   const prefs = useRef(loadJSON('retail-chat-prefs', {})).current
-  const [color, setColor] = useState(prefs.color || COLORS[0])
-  const [size, setSize] = useState(prefs.size || SIZES[0])
   const [tabs, setTabs] = useState(() => {
     const saved = loadJSON('retail-chat-tabs', DEFAULT_TABS)
     return Array.isArray(saved) && saved.length ? saved : DEFAULT_TABS
+  })
+  const [tabSelections, setTabSelections] = useState(() => {
+    const saved = loadJSON('retail-chat-tab-selections', {})
+    return Object.keys(saved).length ? saved : Object.fromEntries(DEFAULT_TABS.map(tab => [tab, { color: prefs.color || COLORS[0], size: prefs.size || SIZES[0] }]))
   })
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('retail-chat-active-tab') || DEFAULT_TABS[0])
   const [editingTab, setEditingTab] = useState(null)
@@ -67,10 +70,13 @@ export default function App() {
   const [title, setTitle] = useState('New conversation')
   const [chats, setChats] = useState(() => loadJSON('retail-chats', []))
   const scrollRef = useRef(null)
-  useEffect(() => localStorage.setItem('retail-chat-prefs', JSON.stringify({ color, size, model })), [color, size, model])
+  const currentSelection = tabSelections[activeTab] || { color: COLORS[0], size: SIZES[0] }
+  const { color, size } = currentSelection
+  useEffect(() => localStorage.setItem('retail-chat-prefs', JSON.stringify({ model })), [model])
   useEffect(() => localStorage.setItem('retail-chat-sidebar-width', String(sidebarWidth)), [sidebarWidth])
   useEffect(() => localStorage.setItem('retail-chat-active-tab', activeTab), [activeTab])
   useEffect(() => localStorage.setItem('retail-chat-tabs', JSON.stringify(tabs)), [tabs])
+  useEffect(() => localStorage.setItem('retail-chat-tab-selections', JSON.stringify(tabSelections)), [tabSelections])
 
   const addTab = () => {
     const usedNumbers = new Set(tabs.map(tab => Number(tab.match(/^Tab (\d+)$/)?.[1])).filter(Number.isFinite))
@@ -78,6 +84,7 @@ export default function App() {
     while (usedNumbers.has(number)) number += 1
     const newTab = `Tab ${number}`
     setTabs(current => [...current, newTab])
+    setTabSelections(current => ({ ...current, [newTab]: { color: COLORS[0], size: SIZES[0] } }))
     setActiveTab(newTab)
   }
   const startRenamingTab = tab => {
@@ -89,6 +96,10 @@ export default function App() {
     const nextName = tabNameDraft.trim()
     if (nextName && (nextName === editingTab || !tabs.includes(nextName))) {
       setTabs(current => current.map(tab => tab === editingTab ? nextName : tab))
+      setTabSelections(current => {
+        const { [editingTab]: selection, ...rest } = current
+        return { ...rest, [nextName]: selection || { color: COLORS[0], size: SIZES[0] } }
+      })
       if (activeTab === editingTab) setActiveTab(nextName)
     }
     setEditingTab(null)
@@ -121,27 +132,38 @@ export default function App() {
     else setSidebarWidth(width => Math.min(600, Math.max(180, width + (event.key === 'ArrowRight' ? 20 : -20))))
   }
 
-  const handlers = useMemo(() => ({
-    get_menu_selections: () => ({ color, size }),
+  const handlers = useMemo(() => {
+    const resolveTab = requested => {
+      if (!requested) return activeTab
+      const match = tabs.find(tab => tab.toLowerCase() === String(requested).toLowerCase())
+      if (!match) throw new Error(`Unknown tab: ${requested}. Available tabs: ${tabs.join(', ')}`)
+      return match
+    }
+    return {
+    get_menu_selections: args => {
+      const tab = resolveTab(args.tab)
+      return { tab, ...(tabSelections[tab] || { color: COLORS[0], size: SIZES[0] }) }
+    },
     set_menu_selections: changes => {
+      const tab = resolveTab(changes.tab)
+      const selection = tabSelections[tab] || { color: COLORS[0], size: SIZES[0] }
       if (changes.color !== undefined) {
         if (!COLORS.includes(changes.color)) throw new Error(`Invalid color: ${changes.color}`)
-        setColor(changes.color)
       }
       if (changes.size !== undefined) {
         if (!SIZES.includes(changes.size)) throw new Error(`Invalid size: ${changes.size}`)
-        setSize(changes.size)
       }
+      const nextSelection = { color: changes.color ?? selection.color, size: changes.size ?? selection.size }
+      setTabSelections(current => ({ ...current, [tab]: nextSelection }))
       return {
         success: true,
-        selection: {
-          color: changes.color ?? color,
-          size: changes.size ?? size
-        }
+        tab,
+        selection: nextSelection
       }
     }
-  }), [color, size])
-  const systemPrompt = `You are a concise assistant. ${contextOn ? `The user is viewing ${activeTab}. Their current choices are color: ${color}, and size: ${size}. Use the menu tools when you need to read or change these choices.` : ''}`
+  }}, [activeTab, tabs, tabSelections])
+  const tabSummary = tabs.map(tab => `${tab}: ${tabSelections[tab]?.color || COLORS[0]}, ${tabSelections[tab]?.size || SIZES[0]}`).join('; ')
+  const systemPrompt = `You are a concise assistant. ${contextOn ? `The active tab is ${activeTab}. Tab selections are: ${tabSummary}. A request naming a tab applies only to that tab. A request without a tab applies only to the active tab. Use the menu tools to make changes.` : ''}`
   const save = finished => {
     if (!finished.some(m => m.role === 'user')) return
     const id = currentId || crypto.randomUUID(), chatTitle = finished.find(m => m.role === 'user').content.slice(0, 60)
@@ -169,8 +191,8 @@ export default function App() {
         <button type="button" className="add-tab" aria-label="Add tab" title="Add tab" onClick={addTab}>+</button>
       </nav>
       <div className="tab-panel" role="tabpanel" aria-label={`${activeTab} controls`}>
-        <Select label="Color" value={color} onChange={setColor}>{COLORS.map(value=><option key={value}>{value}</option>)}</Select>
-        <Select label="Size" value={size} onChange={setSize}>{SIZES.map(value=><option key={value}>{value}</option>)}</Select>
+        <Select label="Color" value={color} onChange={value => setTabSelections(current => ({ ...current, [activeTab]: { ...currentSelection, color: value } }))}>{COLORS.map(value=><option key={value}>{value}</option>)}</Select>
+        <Select label="Size" value={size} onChange={value => setTabSelections(current => ({ ...current, [activeTab]: { ...currentSelection, size: value } }))}>{SIZES.map(value=><option key={value}>{value}</option>)}</Select>
       </div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Resize left panel" aria-orientation="vertical" aria-valuemin="180" aria-valuemax="600" aria-valuenow={sidebarWidth} tabIndex="0" onPointerDown={resizeSidebar} onKeyDown={resizeSidebarWithKeyboard}/>
