@@ -5,6 +5,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Bot, Check, ChevronDown, Copy, Download, History, Menu, Plus, Printer, Send, Settings, Square, Trash2, User, Wrench, X } from 'lucide-react'
 import { useOpenRouterChat } from './useOpenRouterChat'
+import prismLogo from './assets/prism-logo.png'
 
 const COLORS = ['Red', 'Green', 'Blue']
 const SIZES = ['Small', 'Medium', 'Large']
@@ -86,6 +87,18 @@ export default function App() {
     setTabs(current => [...current, newTab])
     setTabSelections(current => ({ ...current, [newTab]: { color: COLORS[0], size: SIZES[0] } }))
     setActiveTab(newTab)
+  }
+  const removeTab = tabToRemove => {
+    if (tabs.length === 1) return
+    const removedIndex = tabs.indexOf(tabToRemove)
+    const nextTabs = tabs.filter(tab => tab !== tabToRemove)
+    setTabs(nextTabs)
+    setTabSelections(current => {
+      const { [tabToRemove]: removed, ...rest } = current
+      return rest
+    })
+    if (activeTab === tabToRemove) setActiveTab(nextTabs[Math.min(removedIndex, nextTabs.length - 1)])
+    if (editingTab === tabToRemove) cancelRenamingTab()
   }
   const startRenamingTab = tab => {
     setEditingTab(tab)
@@ -182,12 +195,14 @@ export default function App() {
   return <div className="app-shell" style={{ '--sidebar-width': `${sidebarWidth}px` }}>
     <aside className="sidebar">
       <nav className="sidebar-tabs" aria-label="Data tabs" role="tablist">
-        {tabs.map(tab => editingTab === tab
-          ? <input key={tab} className="tab-name-input" aria-label={`Rename ${tab}`} value={tabNameDraft} onChange={event => setTabNameDraft(event.target.value)} onBlur={finishRenamingTab} onKeyDown={event => {
+        {tabs.map(tab => <div className={`sidebar-tab${activeTab === tab ? ' active' : ''}`} role="presentation" key={tab}>{editingTab === tab
+          ? <input className="tab-name-input" aria-label={`Rename ${tab}`} value={tabNameDraft} onChange={event => setTabNameDraft(event.target.value)} onBlur={finishRenamingTab} onKeyDown={event => {
               if (event.key === 'Enter') finishRenamingTab()
               if (event.key === 'Escape') cancelRenamingTab()
             }} autoFocus onFocus={event => event.target.select()}/>
-          : <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)} onDoubleClick={() => startRenamingTab(tab)} title="Double-click to rename">{tab}</button>)}
+          : <button type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} onDoubleClick={() => startRenamingTab(tab)} title="Double-click to rename">{tab}</button>}
+          {tabs.length > 1 && editingTab !== tab && <button type="button" className="remove-tab" aria-label={`Remove ${tab}`} title={`Remove ${tab}`} onClick={() => removeTab(tab)}><X/></button>}
+        </div>)}
         <button type="button" className="add-tab" aria-label="Add tab" title="Add tab" onClick={addTab}>+</button>
       </nav>
       <div className="tab-panel" role="tabpanel" aria-label={`${activeTab} controls`}>
@@ -196,7 +211,7 @@ export default function App() {
       </div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Resize left panel" aria-orientation="vertical" aria-valuemin="180" aria-valuemax="600" aria-valuenow={sidebarWidth} tabIndex="0" onPointerDown={resizeSidebar} onKeyDown={resizeSidebarWithKeyboard}/>
-    <main><header><div><b>AI research chat</b><small>{title}</small></div><div className="header-actions">
+    <main><header><div className="app-brand"><div className="app-brand-line"><span className="app-brand-mark"><img src={prismLogo} alt="PRISM"/></span><b>PRISM AI Chat</b></div></div><div className="header-actions">
       <Select label="" className="model-select" value={model} onChange={setModel}>{MODELS.map(([id,name])=><option key={id} value={id}>{name}</option>)}</Select>
       <div className="menu-wrap"><button className="icon" onClick={()=>setMenuOpen(!menuOpen)} aria-label="Menu"><Menu/></button>{menuOpen&&<ActionMenu close={()=>setMenuOpen(false)} actions={{new:newChat,history:()=>setHistoryOpen(true),markdown:exportMarkdown,print:()=>print(),settings:()=>setSettingsOpen(true),clear:newChat}}/>}</div>
     </div></header>
