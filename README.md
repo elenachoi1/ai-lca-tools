@@ -8,10 +8,12 @@ the UI to a focused chat page with dropdown-driven model, mode, company, and
 year controls.
 
 ```bash
-cd retail-chat
-npm install
-npm run dev
+./start-dev-server.sh
 ```
+
+The launcher installs dependencies when needed and listens on `0.0.0.0:5173`
+so it works in local containers and Codespaces. Override either value with
+`HOST` or `PORT`, for example `PORT=3000 ./start-dev-server.sh`.
 
 Add an OpenRouter API key through the page's **Settings** menu. Keys are stored
 in browser local storage for this standalone demo; a production deployment

@@ -1,0 +1,47 @@
+.app-shell {
+  grid-template-columns: var(--sidebar-width, 220px) 5px minmax(0, 1fr);
+}
+
+.sidebar {
+  min-width: 0;
+  overflow: auto;
+}
+
+.sidebar-resizer {
+  position: relative;
+  background: #14251d;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 0 1px;
+  background: #55b68a;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus::after,
+.resizing-sidebar .sidebar-resizer::after {
+  opacity: 1;
+}
+
+.resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar-resizer {
+    display: none;
+  }
+}
