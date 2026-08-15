@@ -1,5 +1,21 @@
 # AI Agentic Tools Template
 
+## Shared agent state
+
+The reusable Zustand state and validated LLM command bridge is in
+[`packages/agent-state`](./packages/agent-state). It is domain-neutral and can
+be used by multiple applications and panels without giving a model direct
+access to raw store mutation.
+
+```bash
+cd packages/agent-state
+npm install
+npm test
+```
+
+See the package README for vanilla Zustand, React, selective persistence,
+command validation, and user-confirmation examples.
+
 ## Retail AI chat extraction
 
 The React/Vite chat extraction is in [`retail-chat`](./retail-chat). It keeps

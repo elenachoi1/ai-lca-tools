@@ -1,0 +1,30 @@
+{
+  "name": "@ai-lca-tools/agent-state",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Framework-agnostic Zustand state and validated command bridge for agent-driven interfaces",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./src/index.js",
+    "./react": "./src/react.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/createAgentStore.js && node --check src/createCommandBus.js && node --check src/storage.js && node --check src/react.js && node --check src/index.js"
+  },
+  "dependencies": {
+    "zustand": "^5.0.8"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

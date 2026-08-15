@@ -9,8 +9,18 @@ import prismLogo from './assets/prism-logo.png'
 
 const COLORS = ['Red', 'Green', 'Blue']
 const SIZES = ['Small', 'Medium', 'Large']
+const ANSWERS = ['Yes', 'No', 'Maybe']
+const BOOLEAN_VALUES = ['True', 'False']
+const FRUITS = ['Apple', 'Orange', 'Banana']
 const DEFAULT_TABS = ['Tab 1', 'Tab 2', 'Tab 3']
-const MODELS = [['openai/gpt-4o-mini', 'GPT-4o mini'], ['anthropic/claude-3.5-sonnet', 'Claude 3.5 Sonnet'], ['google/gemini-2.0-flash-001', 'Gemini 2.0 Flash'], ['meta-llama/llama-3.3-70b-instruct', 'Llama 3.3 70B']]
+const FIELD_DEFINITIONS = {
+  color: { label: 'Color', values: COLORS, control: 'select' },
+  size: { label: 'Size', values: SIZES, control: 'select' },
+  answer: { label: 'Answer', values: ANSWERS, control: 'select' },
+  boolean: { label: 'Boolean', values: BOOLEAN_VALUES, control: 'select' },
+  fruit: { label: 'Fruit', values: FRUITS, control: 'radio' }
+}
+const MODELS = [['openai/gpt-4o-mini', 'GPT-4o mini'], ['anthropic/claude-3.5-sonnet', 'Claude 3.5 Sonnet'], ['google/gemini-3.7-flash', 'Gemini 3.7 Flash']]
 const SUGGESTIONS = ['Tell me about my choices', 'Suggest something that fits', 'What can I do with these options?']
 const MENU_TOOLS = [
   {
@@ -30,7 +40,7 @@ const MENU_TOOLS = [
     type: 'function',
     function: {
       name: 'get_menu_selections',
-      description: 'Get the color and size selected in a specific tab. Omit tab to read the active tab.',
+      description: 'Get the selections in a specific tab. Omit tab to read the active tab.',
       parameters: { type: 'object', properties: { tab: { type: 'string', description: 'Tab name, such as Tab 2.' } }, additionalProperties: false }
     }
   },
@@ -38,13 +48,16 @@ const MENU_TOOLS = [
     type: 'function',
     function: {
       name: 'set_menu_selections',
-      description: 'Change one or both selections in exactly one tab. Omit tab to change only the active tab.',
+      description: 'Change one or more available selections in exactly one tab. Omit tab to change only the active tab.',
       parameters: {
         type: 'object',
         properties: {
           tab: { type: 'string', description: 'Tab name to update, such as Tab 2. Defaults to the active tab.' },
-          color: { type: 'string', enum: COLORS },
-          size: { type: 'string', enum: SIZES }
+          color: { type: 'string', enum: COLORS, description: 'Color selection for a color/size tab.' },
+          size: { type: 'string', enum: SIZES, description: 'Size selection for a color/size tab.' },
+          answer: { type: 'string', enum: ANSWERS, description: 'Yes, No, or Maybe selection for an answer/boolean tab.' },
+          boolean: { type: 'string', enum: BOOLEAN_VALUES, description: 'True or False selection for an answer/boolean tab.' },
+          fruit: { type: 'string', enum: FRUITS, description: 'Fruit selection for a fruit tab.' }
         },
         additionalProperties: false
       }
@@ -53,7 +66,17 @@ const MENU_TOOLS = [
 ]
 
 function Select({ label, value, onChange, children, className='' }) { return <label className={`field ${className}`}><span>{label}</span><select value={value} onChange={e => onChange(e.target.value)}>{children}</select><ChevronDown size={14}/></label> }
+function RadioGroup({ label, name, value, values, onChange }) { return <fieldset className="radio-field"><legend>{label}</legend><div className="radio-options">{values.map(option => <label key={option}><input type="radio" name={name} value={option} checked={value === option} onChange={event => onChange(event.target.value)}/><span>{option}</span></label>)}</div></fieldset> }
 function loadJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback } catch { return fallback } }
+function defaultSelection(tab, saved) {
+  if (tab === 'Tab 2' || saved?.answer !== undefined || saved?.boolean !== undefined) return { answer: ANSWERS[0], boolean: BOOLEAN_VALUES[0] }
+  if (tab === 'Tab 3' || saved?.fruit !== undefined) return { fruit: FRUITS[0] }
+  return { color: COLORS[0], size: SIZES[0] }
+}
+function normalizeSelection(tab, saved) {
+  const defaults = defaultSelection(tab, saved)
+  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, FIELD_DEFINITIONS[key].values.includes(saved?.[key]) ? saved[key] : fallback]))
+}
 
 export default function App() {
   const prefs = useRef(loadJSON('retail-chat-prefs', {})).current
@@ -63,7 +86,9 @@ export default function App() {
   })
   const [tabSelections, setTabSelections] = useState(() => {
     const saved = loadJSON('retail-chat-tab-selections', {})
-    return Object.keys(saved).length ? saved : Object.fromEntries(DEFAULT_TABS.map(tab => [tab, { color: prefs.color || COLORS[0], size: prefs.size || SIZES[0] }]))
+    return Object.fromEntries(tabs.map(tab => [tab, tab === 'Tab 1' && !Object.keys(saved).length
+      ? { color: prefs.color || COLORS[0], size: prefs.size || SIZES[0] }
+      : normalizeSelection(tab, saved[tab])]))
   })
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('retail-chat-active-tab') || DEFAULT_TABS[0])
   const [editingTab, setEditingTab] = useState(null)
@@ -72,7 +97,7 @@ export default function App() {
     const saved = Number(localStorage.getItem('retail-chat-sidebar-width'))
     return Number.isFinite(saved) && saved >= 180 && saved <= 600 ? saved : 220
   })
-  const [model, setModel] = useState(prefs.model || MODELS[0][0])
+  const [model, setModel] = useState(() => MODELS.some(([id]) => id === prefs.model) ? prefs.model : MODELS[0][0])
   const [apiKey, setApiKey] = useState(localStorage.getItem('retail-chat-key') || '')
   const [endpoint, setEndpoint] = useState(localStorage.getItem('retail-chat-endpoint') || 'https://openrouter.ai/api/v1/chat/completions')
   const [contextOn, setContextOn] = useState(true)
@@ -84,8 +109,8 @@ export default function App() {
   const [title, setTitle] = useState('New conversation')
   const [chats, setChats] = useState(() => loadJSON('retail-chats', []))
   const scrollRef = useRef(null)
-  const currentSelection = tabSelections[activeTab] || { color: COLORS[0], size: SIZES[0] }
-  const { color, size } = currentSelection
+  const currentSelection = tabSelections[activeTab] || defaultSelection(activeTab)
+  const currentFields = Object.keys(currentSelection).map(key => [key, FIELD_DEFINITIONS[key]]).filter(([, definition]) => definition)
   useEffect(() => localStorage.setItem('retail-chat-prefs', JSON.stringify({ model })), [model])
   useEffect(() => localStorage.setItem('retail-chat-sidebar-width', String(sidebarWidth)), [sidebarWidth])
   useEffect(() => localStorage.setItem('retail-chat-active-tab', activeTab), [activeTab])
@@ -98,7 +123,7 @@ export default function App() {
     while (usedNumbers.has(number)) number += 1
     const newTab = `Tab ${number}`
     setTabs(current => [...current, newTab])
-    setTabSelections(current => ({ ...current, [newTab]: { color: COLORS[0], size: SIZES[0] } }))
+    setTabSelections(current => ({ ...current, [newTab]: defaultSelection(newTab) }))
     setActiveTab(newTab)
   }
   const removeTab = tabToRemove => {
@@ -124,7 +149,7 @@ export default function App() {
       setTabs(current => current.map(tab => tab === editingTab ? nextName : tab))
       setTabSelections(current => {
         const { [editingTab]: selection, ...rest } = current
-        return { ...rest, [nextName]: selection || { color: COLORS[0], size: SIZES[0] } }
+        return { ...rest, [nextName]: selection || defaultSelection(nextName) }
       })
       if (activeTab === editingTab) setActiveTab(nextName)
     }
@@ -173,18 +198,18 @@ export default function App() {
     },
     get_menu_selections: args => {
       const tab = resolveTab(args.tab)
-      return { tab, ...(tabSelections[tab] || { color: COLORS[0], size: SIZES[0] }) }
+      return { tab, ...(tabSelections[tab] || defaultSelection(tab)) }
     },
     set_menu_selections: changes => {
       const tab = resolveTab(changes.tab)
-      const selection = tabSelections[tab] || { color: COLORS[0], size: SIZES[0] }
-      if (changes.color !== undefined) {
-        if (!COLORS.includes(changes.color)) throw new Error(`Invalid color: ${changes.color}`)
+      const selection = tabSelections[tab] || defaultSelection(tab)
+      const updates = Object.entries(changes).filter(([key, value]) => key !== 'tab' && value !== undefined)
+      if (!updates.length) throw new Error(`No selections supplied for ${tab}`)
+      for (const [key, value] of updates) {
+        if (!(key in selection)) throw new Error(`${key} is not available in ${tab}`)
+        if (!FIELD_DEFINITIONS[key]?.values.includes(value)) throw new Error(`Invalid ${key}: ${value}`)
       }
-      if (changes.size !== undefined) {
-        if (!SIZES.includes(changes.size)) throw new Error(`Invalid size: ${changes.size}`)
-      }
-      const nextSelection = { color: changes.color ?? selection.color, size: changes.size ?? selection.size }
+      const nextSelection = { ...selection, ...Object.fromEntries(updates) }
       setTabSelections(current => ({ ...current, [tab]: nextSelection }))
       return {
         success: true,
@@ -193,7 +218,10 @@ export default function App() {
       }
     }
   }}, [activeTab, tabs, tabSelections])
-  const tabSummary = tabs.map(tab => `${tab}: ${tabSelections[tab]?.color || COLORS[0]}, ${tabSelections[tab]?.size || SIZES[0]}`).join('; ')
+  const tabSummary = tabs.map(tab => {
+    const selection = tabSelections[tab] || defaultSelection(tab)
+    return `${tab}: ${Object.entries(selection).map(([key, value]) => `${FIELD_DEFINITIONS[key]?.label || key} ${value}`).join(', ')}`
+  }).join('; ')
   const systemPrompt = `You are a concise assistant. ${contextOn ? `The active tab is ${activeTab}. Tab selections are: ${tabSummary}. A request to show, open, view, or go to a tab must use show_tab. A request naming a tab applies only to that tab. A request without a tab applies only to the active tab. Use the menu tools to make changes.` : ''}`
   const save = finished => {
     if (!finished.some(m => m.role === 'user')) return
@@ -224,8 +252,9 @@ export default function App() {
         <button type="button" className="add-tab" aria-label="Add tab" title="Add tab" onClick={addTab}>+</button>
       </nav>
       <div className="tab-panel" role="tabpanel" aria-label={`${activeTab} controls`}>
-        <Select label="Color" value={color} onChange={value => setTabSelections(current => ({ ...current, [activeTab]: { ...currentSelection, color: value } }))}>{COLORS.map(value=><option key={value}>{value}</option>)}</Select>
-        <Select label="Size" value={size} onChange={value => setTabSelections(current => ({ ...current, [activeTab]: { ...currentSelection, size: value } }))}>{SIZES.map(value=><option key={value}>{value}</option>)}</Select>
+        {currentFields.map(([key, definition]) => definition.control === 'radio'
+          ? <RadioGroup key={key} label={definition.label} name={`${activeTab}-${key}`} value={currentSelection[key]} values={definition.values} onChange={value => setTabSelections(current => ({ ...current, [activeTab]: { ...currentSelection, [key]: value } }))}/>
+          : <Select key={key} label={definition.label} value={currentSelection[key]} onChange={value => setTabSelections(current => ({ ...current, [activeTab]: { ...currentSelection, [key]: value } }))}>{definition.values.map(value=><option key={value}>{value}</option>)}</Select>)}
       </div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Resize left panel" aria-orientation="vertical" aria-valuemin="180" aria-valuemax="600" aria-valuenow={sidebarWidth} tabIndex="0" onPointerDown={resizeSidebar} onKeyDown={resizeSidebarWithKeyboard}/>
@@ -233,7 +262,7 @@ export default function App() {
       <Select label="" className="model-select" value={model} onChange={setModel}>{MODELS.map(([id,name])=><option key={id} value={id}>{name}</option>)}</Select>
       <div className="menu-wrap"><button className="icon" onClick={()=>setMenuOpen(!menuOpen)} aria-label="Menu"><Menu/></button>{menuOpen&&<ActionMenu close={()=>setMenuOpen(false)} actions={{new:newChat,history:()=>setHistoryOpen(true),markdown:exportMarkdown,print:()=>print(),settings:()=>setSettingsOpen(true),clear:newChat}}/>}</div>
     </div></header>
-    <section className="conversation" ref={scrollRef}>{!chat.messages.length&&<div className="welcome"><small>AI ASSISTANT</small><h1>What would you like to know?</h1><p>Your current choices are {color.toLowerCase()} and {size.toLowerCase()}.</p><div className="suggestions">{SUGGESTIONS.map(p=><button key={p} onClick={()=>submit(p)}>{p}</button>)}</div></div>}
+    <section className="conversation" ref={scrollRef}>{!chat.messages.length&&<div className="welcome"><small>AI ASSISTANT</small><h1>What would you like to know?</h1><p>Your current choices are {Object.values(currentSelection).map(value => value.toLowerCase()).join(' and ')}.</p><div className="suggestions">{SUGGESTIONS.map(p=><button key={p} onClick={()=>submit(p)}>{p}</button>)}</div></div>}
       {chat.messages.map((message,index)=><Message key={index} message={message} model={MODELS.find(m=>m[0]===model)?.[1]}/>)}</section>
     <footer><div className="composer"><textarea value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit(draft)}}} placeholder="Ask about the selected companies…"/><div><button className="context" onClick={()=>setContextOn(!contextOn)}>◎ Context {contextOn?'on':'off'}</button><span className="status">{chat.status==='streaming'&&'● Thinking'}</span><button className="send" onClick={()=>chat.status==='streaming'?chat.stop():submit(draft)}>{chat.status==='streaming'?<Square/>:<Send/>}</button></div></div>{chat.error&&<p className="error">{chat.error}</p>}<small>AI can make mistakes. Check important financial figures.</small></footer>
     </main>
