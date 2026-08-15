@@ -8,6 +8,7 @@ import { useOpenRouterChat } from './useOpenRouterChat'
 
 const COLORS = ['Red', 'Green', 'Blue']
 const SIZES = ['Small', 'Medium', 'Large']
+const DEFAULT_TABS = ['Tab 1', 'Tab 2', 'Tab 3']
 const MODELS = [['openai/gpt-4o-mini', 'GPT-4o mini'], ['anthropic/claude-3.5-sonnet', 'Claude 3.5 Sonnet'], ['google/gemini-2.0-flash-001', 'Gemini 2.0 Flash'], ['meta-llama/llama-3.3-70b-instruct', 'Llama 3.3 70B']]
 const SUGGESTIONS = ['Tell me about my choices', 'Suggest something that fits', 'What can I do with these options?']
 const MENU_TOOLS = [
@@ -43,6 +44,13 @@ export default function App() {
   const prefs = useRef(loadJSON('retail-chat-prefs', {})).current
   const [color, setColor] = useState(prefs.color || COLORS[0])
   const [size, setSize] = useState(prefs.size || SIZES[0])
+  const [tabs, setTabs] = useState(() => {
+    const saved = loadJSON('retail-chat-tabs', DEFAULT_TABS)
+    return Array.isArray(saved) && saved.length ? saved : DEFAULT_TABS
+  })
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('retail-chat-active-tab') || DEFAULT_TABS[0])
+  const [editingTab, setEditingTab] = useState(null)
+  const [tabNameDraft, setTabNameDraft] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem('retail-chat-sidebar-width'))
     return Number.isFinite(saved) && saved >= 180 && saved <= 600 ? saved : 220
@@ -61,6 +69,35 @@ export default function App() {
   const scrollRef = useRef(null)
   useEffect(() => localStorage.setItem('retail-chat-prefs', JSON.stringify({ color, size, model })), [color, size, model])
   useEffect(() => localStorage.setItem('retail-chat-sidebar-width', String(sidebarWidth)), [sidebarWidth])
+  useEffect(() => localStorage.setItem('retail-chat-active-tab', activeTab), [activeTab])
+  useEffect(() => localStorage.setItem('retail-chat-tabs', JSON.stringify(tabs)), [tabs])
+
+  const addTab = () => {
+    const usedNumbers = new Set(tabs.map(tab => Number(tab.match(/^Tab (\d+)$/)?.[1])).filter(Number.isFinite))
+    let number = 1
+    while (usedNumbers.has(number)) number += 1
+    const newTab = `Tab ${number}`
+    setTabs(current => [...current, newTab])
+    setActiveTab(newTab)
+  }
+  const startRenamingTab = tab => {
+    setEditingTab(tab)
+    setTabNameDraft(tab)
+  }
+  const finishRenamingTab = () => {
+    if (!editingTab) return
+    const nextName = tabNameDraft.trim()
+    if (nextName && (nextName === editingTab || !tabs.includes(nextName))) {
+      setTabs(current => current.map(tab => tab === editingTab ? nextName : tab))
+      if (activeTab === editingTab) setActiveTab(nextName)
+    }
+    setEditingTab(null)
+    setTabNameDraft('')
+  }
+  const cancelRenamingTab = () => {
+    setEditingTab(null)
+    setTabNameDraft('')
+  }
 
   const resizeSidebar = event => {
     event.preventDefault()
@@ -104,7 +141,7 @@ export default function App() {
       }
     }
   }), [color, size])
-  const systemPrompt = `You are a concise assistant. ${contextOn ? `The user's current choices are color: ${color}, and size: ${size}. Use the menu tools when you need to read or change these choices.` : ''}`
+  const systemPrompt = `You are a concise assistant. ${contextOn ? `The user is viewing ${activeTab}. Their current choices are color: ${color}, and size: ${size}. Use the menu tools when you need to read or change these choices.` : ''}`
   const save = finished => {
     if (!finished.some(m => m.role === 'user')) return
     const id = currentId || crypto.randomUUID(), chatTitle = finished.find(m => m.role === 'user').content.slice(0, 60)
@@ -122,8 +159,19 @@ export default function App() {
 
   return <div className="app-shell" style={{ '--sidebar-width': `${sidebarWidth}px` }}>
     <aside className="sidebar">
-      <Select label="Color" value={color} onChange={setColor}>{COLORS.map(value=><option key={value}>{value}</option>)}</Select>
-      <Select label="Size" value={size} onChange={setSize}>{SIZES.map(value=><option key={value}>{value}</option>)}</Select>
+      <nav className="sidebar-tabs" aria-label="Data tabs" role="tablist">
+        {tabs.map(tab => editingTab === tab
+          ? <input key={tab} className="tab-name-input" aria-label={`Rename ${tab}`} value={tabNameDraft} onChange={event => setTabNameDraft(event.target.value)} onBlur={finishRenamingTab} onKeyDown={event => {
+              if (event.key === 'Enter') finishRenamingTab()
+              if (event.key === 'Escape') cancelRenamingTab()
+            }} autoFocus onFocus={event => event.target.select()}/>
+          : <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)} onDoubleClick={() => startRenamingTab(tab)} title="Double-click to rename">{tab}</button>)}
+        <button type="button" className="add-tab" aria-label="Add tab" title="Add tab" onClick={addTab}>+</button>
+      </nav>
+      <div className="tab-panel" role="tabpanel" aria-label={`${activeTab} controls`}>
+        <Select label="Color" value={color} onChange={setColor}>{COLORS.map(value=><option key={value}>{value}</option>)}</Select>
+        <Select label="Size" value={size} onChange={setSize}>{SIZES.map(value=><option key={value}>{value}</option>)}</Select>
+      </div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Resize left panel" aria-orientation="vertical" aria-valuemin="180" aria-valuemax="600" aria-valuenow={sidebarWidth} tabIndex="0" onPointerDown={resizeSidebar} onKeyDown={resizeSidebarWithKeyboard}/>
     <main><header><div><b>AI research chat</b><small>{title}</small></div><div className="header-actions">

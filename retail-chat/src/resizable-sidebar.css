@@ -7,6 +7,67 @@
   overflow: auto;
 }
 
+.sidebar-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+  border-bottom: 1px solid #3b5347;
+}
+
+.sidebar-tabs button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 7px 7px 0 0;
+  padding: 8px 11px;
+  background: transparent;
+  color: #a8b8af;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sidebar-tabs button:hover {
+  color: #f2f8f4;
+  background: #20372c;
+}
+
+.sidebar-tabs button.active {
+  color: #fff;
+  background: #2d4b3c;
+  box-shadow: inset 0 -2px #55b68a;
+}
+
+.sidebar-tabs button:focus-visible {
+  outline: 2px solid #78d0a8;
+  outline-offset: -2px;
+}
+
+.sidebar-tabs .add-tab {
+  min-width: 32px;
+  padding-inline: 9px;
+  color: #dce8e1;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar-tabs .tab-name-input {
+  width: 78px;
+  min-width: 62px;
+  border: 1px solid #78d0a8;
+  border-radius: 6px 6px 0 0;
+  padding: 6px 8px;
+  outline: none;
+  background: #f5faf7;
+  color: #17211b;
+  font-size: 12px;
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .sidebar-resizer {
   position: relative;
   background: #14251d;
@@ -43,5 +104,15 @@
 
   .sidebar-resizer {
     display: none;
+  }
+
+  .sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
 }
