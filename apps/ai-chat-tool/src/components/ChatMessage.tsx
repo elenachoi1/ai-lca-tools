@@ -3,8 +3,8 @@ import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import type { ChatMessage as ChatMessageValue } from '@ai-lca-tools/chat-react'
 
-import type { ChatMessage as ChatMessageValue } from '@/chat/useOpenRouterChat'
 import { Button } from '@/components/ui/button'
 
 interface ChatMessageProps {
@@ -21,7 +21,7 @@ export function ChatMessage({ message, model }: ChatMessageProps) {
         {message.reasoning && <details><summary>Reasoning summary</summary><p>{message.reasoning}</p></details>}
         {message.tools?.map((tool, index) => (
           <details className={tool.state} key={`${tool.name}-${index}`}>
-            <summary>{tool.state === 'complete' ? <Check /> : <X />}<Wrench /> {tool.name}</summary>
+            <summary>{tool.state === 'complete' ? <Check /> : tool.state === 'error' ? <X /> : null}<Wrench /> {tool.name}</summary>
             <pre>{JSON.stringify(tool.output, null, 2)}</pre>
           </details>
         ))}
@@ -30,12 +30,7 @@ export function ChatMessage({ message, model }: ChatMessageProps) {
         </ReactMarkdown>
         {message.streaming && <span className="typing">●</span>}
         {message.role === 'assistant' && message.content && (
-          <Button
-            variant="ghost"
-            className="copy"
-            title="Copy response"
-            onClick={() => { void navigator.clipboard.writeText(message.content) }}
-          >
+          <Button variant="ghost" className="copy" title="Copy response" onClick={() => { void navigator.clipboard.writeText(message.content) }}>
             <Copy /> Copy
           </Button>
         )}

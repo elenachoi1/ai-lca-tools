@@ -23,15 +23,17 @@
     "test": "node --test",
     "check": "node --check src/createAgentStore.js && node --check src/createCommandBus.js && node --check src/createPaneRuntime.js && node --check src/storage.js && node --check src/react.js && node --check src/index.js"
   },
-  "dependencies": {
-    "zustand": "^5.0.8"
-  },
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "zustand": "^4.5.7 || ^5.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "react": "^19.2.1",
+    "zustand": "^5.0.15"
   }
 }

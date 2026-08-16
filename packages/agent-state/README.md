@@ -147,6 +147,55 @@ const safePromptContext = runtime.getModelContext()
 UI controls use the same named actions through `runtime.store`. React hosts can
 bind it with `createStoreHook` from `@ai-lca-tools/agent-state/react`.
 
+### Register panes over a host-owned store
+
+Applications that already own their state pass their `createAgentStore` store
+to the runtime. Each pane explicitly selects its internal state and the named
+actions its command handlers may invoke. The runtime never receives or exposes
+raw `setState`:
+
+```ts
+const runtime = createPaneRuntime({
+  store: productGraphStore,
+  selectActivePaneId: state => state.activeView,
+  switchPane: (paneId, context) => {
+    // This can preserve unsaved-work and availability guards.
+    context.actions.requestViewChange(paneId)
+  },
+  panes: [{
+    id: 'graph',
+    title: 'Graph',
+    selectState: state => ({
+      selectedNodeId: state.selectedNodeId,
+      graphMode: state.graphMode
+    }),
+    selectActions: actions => ({
+      selectNode: actions.selectNode,
+      setGraphMode: actions.setGraphMode
+    }),
+    llm: {
+      available: () => true,
+      selectState: state => state,
+      commands: {
+        select_graph_node: {
+          risk: 'ui',
+          validate: args => args,
+          execute: ({ nodeId }, context) => {
+            context.actions.selectNode(nodeId)
+            return context.getState()
+          }
+        }
+      }
+    }
+  }]
+})
+```
+
+`llm.available` controls whether a registered pane can currently be read,
+switched to, or acted upon. This lets result views remain registered while
+unavailable until a current calculation exists. Persistence stays owned by the
+host store in this mode.
+
 ## Create an LLM command bus
 
 ```ts

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -7,7 +8,9 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import { Bot, Moon, PanelLeft, Send, Square, Sun, Trash2, X } from 'lucide-react'
+import { useAiChat, type ChatMessage as ChatMessageValue } from '@ai-lca-tools/chat-react'
 
+import { createOpenRouterTransport } from '@/chat/openRouterTransport'
 import { ActionMenu } from '@/components/ActionMenu'
 import { ChatMessage } from '@/components/ChatMessage'
 import { RadioGroupControl, SelectControl } from '@/components/FormControls'
@@ -16,7 +19,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DEFAULT_ENDPOINT, loadJSON, MODELS, storageKey } from '@/config'
-import { useOpenRouterChat, type ChatMessage as ChatMessageValue } from '@/chat/useOpenRouterChat'
 import { paneRuntime, paneToolHandlers, paneTools, usePaneStore } from '@/panes/runtime'
 import type { SelectionPaneActions, SelectionPaneState } from '@/panes/registry'
 
@@ -76,6 +78,11 @@ export default function App() {
   const scrollRef = useRef<HTMLElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const controlsTriggerRef = useRef<HTMLButtonElement>(null)
+  const transport = useMemo(() => createOpenRouterTransport({
+    apiKey,
+    endpoint,
+    appTitle: 'AI Chat Tool'
+  }), [apiKey, endpoint])
 
   useEffect(() => {
     localStorage.setItem(storageKey('preferences'), JSON.stringify({ model }))
@@ -104,7 +111,7 @@ export default function App() {
   }, [controlsOpen])
 
   const baseSystemPrompt = 'You are a concise assistant embedded in an application. Use only the registered pane tools to read or change application state. Never claim access to an unregistered pane or unexposed state.'
-  const systemPrompt = contextOn
+  const getSystemPrompt = () => contextOn
     ? `${baseSystemPrompt}\n\nCurrent registered pane context:\n${JSON.stringify(paneRuntime.getModelContext(), null, 2)}`
     : baseSystemPrompt
 
@@ -123,14 +130,13 @@ export default function App() {
     localStorage.setItem(storageKey('conversations'), JSON.stringify(next))
   }
 
-  const chat = useOpenRouterChat({
-    apiKey,
-    endpoint,
+  const chat = useAiChat({
     model,
-    systemPrompt,
+    transport,
+    getSystemPrompt,
     tools: paneTools,
     handlers: paneToolHandlers,
-    appTitle: 'AI Chat Tool',
+    confirmations: paneRuntime.commandBus,
     onComplete: saveConversation
   })
 
@@ -200,11 +206,7 @@ export default function App() {
   }
 
   return (
-    <div
-      className="app-shell"
-      data-theme={theme}
-      style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
-    >
+    <div className="app-shell" data-theme={theme} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <aside ref={sidebarRef} className={`sidebar${controlsOpen ? ' mobile-open' : ''}`} id="control-panel" aria-label="Registered panes">
         <div className="sidebar-heading">
           <b>Panes</b>
@@ -213,54 +215,19 @@ export default function App() {
         <nav className="sidebar-tabs" aria-label="Application panes" role="tablist">
           {paneRuntime.panes.map(pane => (
             <div className={`sidebar-tab${activePaneId === pane.id ? ' active' : ''}`} role="presentation" key={pane.id}>
-              <Button
-                variant="ghost"
-                role="tab"
-                aria-selected={activePaneId === pane.id}
-                onClick={() => switchPane(pane.id)}
-              >
-                {pane.title}
-              </Button>
+              <Button variant="ghost" role="tab" aria-selected={activePaneId === pane.id} onClick={() => switchPane(pane.id)}>{pane.title}</Button>
             </div>
           ))}
         </nav>
         <div className="tab-panel" role="tabpanel" aria-label={`${activePane.title} controls`}>
           {fields.map(([key, field]) => field.control === 'radio'
-            ? (
-              <RadioGroupControl
-                key={key}
-                label={field.label}
-                name={`${activePaneId}-${key}`}
-                value={activePaneState[key]}
-                values={field.values}
-                onChange={value => activePaneActions.setValues({ [key]: value })}
-              />
-              )
-            : (
-              <SelectControl
-                key={key}
-                label={field.label}
-                value={activePaneState[key]}
-                values={field.values}
-                onChange={value => activePaneActions.setValues({ [key]: value })}
-              />
-              ))}
+            ? <RadioGroupControl key={key} label={field.label} name={`${activePaneId}-${key}`} value={activePaneState[key]} values={field.values} onChange={value => activePaneActions.setValues({ [key]: value })} />
+            : <SelectControl key={key} label={field.label} value={activePaneState[key]} values={field.values} onChange={value => activePaneActions.setValues({ [key]: value })} />)}
         </div>
       </aside>
 
       {controlsOpen && <Button variant="ghost" className="sidebar-backdrop" onClick={() => setControlsOpen(false)} aria-label="Close panes" />}
-      <div
-        className="sidebar-resizer"
-        role="separator"
-        aria-label="Resize pane panel"
-        aria-orientation="vertical"
-        aria-valuemin={180}
-        aria-valuemax={600}
-        aria-valuenow={sidebarWidth}
-        tabIndex={0}
-        onPointerDown={resizeSidebar}
-        onKeyDown={resizeSidebarWithKeyboard}
-      />
+      <div className="sidebar-resizer" role="separator" aria-label="Resize pane panel" aria-orientation="vertical" aria-valuemin={180} aria-valuemax={600} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={resizeSidebar} onKeyDown={resizeSidebarWithKeyboard} />
 
       <main>
         <header>
@@ -308,11 +275,12 @@ export default function App() {
                 }
               }}
               placeholder="Ask about a registered pane…"
+              disabled={chat.status === 'awaiting_confirmation'}
             />
             <div>
               <Button variant="outline" className="context" aria-pressed={contextOn} onClick={() => setContextOn(!contextOn)}>Context {contextOn ? 'on' : 'off'}</Button>
-              <span className="status" aria-live="polite">{chat.status === 'streaming' && <><span className="status-dot" />Thinking</>}</span>
-              <Button className="send" size="icon" aria-label={chat.status === 'streaming' ? 'Stop response' : 'Send message'} title={chat.status === 'streaming' ? 'Stop response' : 'Send message'} onClick={() => chat.status === 'streaming' ? chat.stop() : submit(draft)}>{chat.status === 'streaming' ? <Square /> : <Send />}</Button>
+              <span className="status" aria-live="polite">{chat.status === 'streaming' && <><span className="status-dot" />Thinking</>}{chat.status === 'awaiting_confirmation' && 'Waiting for confirmation'}</span>
+              <Button className="send" size="icon" disabled={chat.status === 'awaiting_confirmation'} aria-label={chat.status === 'streaming' ? 'Stop response' : 'Send message'} title={chat.status === 'streaming' ? 'Stop response' : 'Send message'} onClick={() => chat.status === 'streaming' ? chat.stop() : submit(draft)}>{chat.status === 'streaming' ? <Square /> : <Send />}</Button>
             </div>
           </div>
           {chat.error && <p className="error" role="alert">{chat.error}</p>}
@@ -346,6 +314,15 @@ export default function App() {
                 </div>
                 ))
               : <p>No conversations yet.</p>}
+          </div>
+        </Modal>
+      )}
+      {chat.pendingConfirmation && (
+        <Modal title="Confirm assistant action" close={() => { void chat.reject() }}>
+          <p>{chat.pendingConfirmation.summary}</p>
+          <div className="modal-actions">
+            <Button variant="outline" onClick={() => { void chat.reject() }}>Reject</Button>
+            <Button onClick={() => { void chat.confirm() }}>Confirm</Button>
           </div>
         </Modal>
       )}

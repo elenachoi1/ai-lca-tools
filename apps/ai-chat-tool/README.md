@@ -11,12 +11,13 @@ application explicitly exposes to it.
 - Tailwind CSS 4
 - shadcn/ui (`radix-nova`) and Radix primitives
 - Zustand through `@ai-lca-tools/agent-state`
+- Reusable conversation engine through `@ai-lca-tools/chat-react`
 
 ## Structure
 
 ```text
 src/
-├── chat/                  OpenRouter streaming and tool-call hook
+├── chat/                  Demo-only OpenRouter transport adapter
 ├── components/
 │   ├── ui/                shadcn-generated primitives
 │   └── ...                application components
@@ -24,7 +25,7 @@ src/
 │   ├── registry.ts        host-owned pane definitions and LLM contracts
 │   └── runtime.ts         Zustand runtime, React hook, tools, and handlers
 ├── config.ts              models, storage namespace, and endpoint defaults
-├── App.tsx                example application shell
+├── App.tsx                PRISM host shell using the reusable `useAiChat` hook
 └── main.tsx               React entry point
 ```
 
@@ -59,3 +60,9 @@ The shadcn registry is configured in `components.json`. To add a primitive:
 ```bash
 npm exec --workspace @ai-lca-tools/ai-chat-tool -- shadcn add tooltip
 ```
+
+The reusable chat package does not depend on this app's shadcn primitives. This
+demo deliberately keeps its PRISM/shadcn shell and uses the package's headless
+hook underneath; hosts that do not need a custom shell can use `AiChatPanel`.
+The demo supplies OpenRouter as one transport implementation; a production host
+should pass a backend transport instead of browser credentials.

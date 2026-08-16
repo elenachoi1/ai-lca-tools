@@ -16,13 +16,15 @@ application defines its own panes, readable state, actions, and layout.
 
 ## UI boundaries
 
-The chat UI is responsible for messages, streaming, tool activity, the composer,
-model selection, history, and connection settings. The host application is
-responsible for its domain state, pane registry, placement of the chat, and
-production model transport.
+The reusable `@ai-lca-tools/chat-react` UI is responsible for messages,
+streaming, tool activity, the composer, model selection, history, stop behavior,
+and confirmation presentation. The host application is responsible for its
+domain state, pane registry, placement of the chat, provider transport,
+credentials, and confirmation policy.
 
-The example uses a resizable pane rail and conversation area. Other applications
-may present the chat as a sidebar, drawer, dialog, tab, or embedded panel.
+The example uses a resizable pane rail and conversation area. The reusable panel
+does not require that shell; other applications may present it as a sidebar,
+drawer, dialog, tab, or embedded panel.
 
 ## Visual system
 

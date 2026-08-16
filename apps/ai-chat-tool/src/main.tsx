@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from '@/App'
 import './index.css'
+import './chat-shell.css'
 import './resizable-sidebar.css'
 import './theme.css'
 

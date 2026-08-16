@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createPaneRuntime } from '../src/index.js'
+import { createAgentStore, createPaneRuntime } from '../src/index.js'
 
 function createFixture() {
   return createPaneRuntime({
@@ -122,4 +122,133 @@ test('duplicate pane command names fail during startup registration', () => {
       }
     ]
   }), /Duplicate LLM command name/)
+})
+
+function createHostFixture() {
+  const store = createAgentStore({
+    initialState: {
+      activeView: 'graph',
+      selectedNodeId: null,
+      resultsAvailable: false,
+      secret: 'not exposed'
+    },
+    actions: ({ get, set }) => ({
+      requestViewChange: view => {
+        if (view === 'results' && !get().resultsAvailable) {
+          throw new Error('Results are unavailable')
+        }
+        set({ activeView: view })
+      },
+      selectNode: selectedNodeId => set({ selectedNodeId }),
+      makeResultsAvailable: () => set({ resultsAvailable: true }),
+      unsafeReplaceState: value => set(value, true)
+    })
+  })
+
+  const runtime = createPaneRuntime({
+    store,
+    selectActivePaneId: state => state.activeView,
+    switchPane: (paneId, context) => context.actions.requestViewChange(paneId),
+    panes: [
+      {
+        id: 'graph',
+        title: 'Graph',
+        selectState: state => ({ selectedNodeId: state.selectedNodeId }),
+        selectActions: actions => ({ selectNode: actions.selectNode }),
+        llm: {
+          selectState: state => state,
+          commands: {
+            select_graph_node: {
+              validate: args => {
+                if (typeof args.nodeId !== 'string') throw new Error('nodeId is required')
+                return args
+              },
+              execute: ({ nodeId }, context) => {
+                context.actions.selectNode(nodeId)
+                return context.getState()
+              }
+            }
+          }
+        }
+      },
+      {
+        id: 'results',
+        title: 'Results',
+        selectState: state => ({ resultsAvailable: state.resultsAvailable }),
+        llm: {
+          available: state => state.resultsAvailable,
+          selectState: state => state
+        }
+      }
+    ]
+  })
+
+  return { runtime, store }
+}
+
+test('a host-owned store supplies pane state and registered actions', async () => {
+  const { runtime, store } = createHostFixture()
+
+  const selected = await runtime.commandBus.execute('select_graph_node', { nodeId: 'process-7' })
+
+  assert.equal(selected.status, 'completed')
+  assert.equal(store.getState().data.selectedNodeId, 'process-7')
+  assert.deepEqual(selected.result, { selectedNodeId: 'process-7' })
+  assert.deepEqual(runtime.getPaneContext('graph').state, { selectedNodeId: 'process-7' })
+  assert.equal('secret' in runtime.commandBus.getContext().panes[0].state, false)
+})
+
+test('host panes preserve availability and guarded switching', async () => {
+  const { runtime, store } = createHostFixture()
+
+  const unavailable = await runtime.commandBus.execute('switch_pane', { paneId: 'results' })
+  assert.equal(unavailable.status, 'error')
+  assert.equal(unavailable.error.code, 'INVALID_ARGUMENTS')
+  assert.equal(runtime.commandBus.getContext().panes.find(pane => pane.id === 'results').available, false)
+
+  store.getState().actions.makeResultsAvailable()
+  const switched = await runtime.commandBus.execute('switch_pane', { paneId: 'results' })
+
+  assert.equal(switched.status, 'completed')
+  assert.equal(store.getState().data.activeView, 'results')
+  assert.equal(runtime.commandBus.getContext().panes.find(pane => pane.id === 'results').available, true)
+})
+
+test('host pane switching waits for asynchronous navigation guards', async () => {
+  const store = createAgentStore({
+    initialState: { activeView: 'graph' },
+    actions: ({ set }) => ({ openView: activeView => set({ activeView }) })
+  })
+  const runtime = createPaneRuntime({
+    store,
+    selectActivePaneId: state => state.activeView,
+    switchPane: async (paneId, context) => {
+      await Promise.resolve()
+      context.actions.openView(paneId)
+    },
+    panes: [
+      { id: 'graph', selectState: state => state, llm: {} },
+      { id: 'editor', selectState: state => state, llm: {} }
+    ]
+  })
+
+  const result = await runtime.commandBus.execute('switch_pane', { paneId: 'editor' })
+
+  assert.equal(result.status, 'completed')
+  assert.equal(store.getState().data.activeView, 'editor')
+})
+
+test('host panes require explicit state selectors and own persistence', () => {
+  const store = createAgentStore({ initialState: { activeView: 'graph' } })
+
+  assert.throws(() => createPaneRuntime({
+    store,
+    panes: [{ id: 'graph', llm: {} }]
+  }), /selectState must be a function/)
+
+  assert.throws(() => createPaneRuntime({
+    store,
+    persistence: {},
+    panes: [{ id: 'graph', selectState: state => state }]
+  }), /persistence is owned by the host store/)
 })

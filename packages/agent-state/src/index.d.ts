@@ -76,7 +76,8 @@ export interface PaneActionApi<TState extends PlainState> {
 
 export interface PaneCommandContext<
   TState extends PlainState = PlainState,
-  TActions extends NamedActions = NamedActions
+  TActions extends NamedActions = NamedActions,
+  TAppState extends PlainState = PaneApplicationState
 > {
   source: string
   pane: { id: string; title: string; description: string }
@@ -84,23 +85,24 @@ export interface PaneCommandContext<
   actions: TActions
   revision: number
   getState(): TState
-  getAppState(): PaneApplicationState
+  getAppState(): TAppState
   getRevision(): number
 }
 
 export interface PaneCommandDefinition<
   TState extends PlainState = PlainState,
-  TActions extends NamedActions = NamedActions
+  TActions extends NamedActions = NamedActions,
+  TAppState extends PlainState = PaneApplicationState
 > {
   description?: string
   parameters?: PlainState
   risk?: string
   confirm?: boolean
   validate?(args: PlainState): PlainState | boolean | void
-  enabled?(args: PlainState, context: PaneCommandContext<TState, TActions>): boolean
-  summary?: string | ((args: PlainState, context: PaneCommandContext<TState, TActions>) => string)
+  enabled?(args: PlainState, context: PaneCommandContext<TState, TActions, TAppState>): boolean
+  summary?: string | ((args: PlainState, context: PaneCommandContext<TState, TActions, TAppState>) => string)
   allowStateChangesBeforeConfirmation?: boolean
-  execute(args: PlainState, context: PaneCommandContext<TState, TActions>): unknown | Promise<unknown>
+  execute(args: PlainState, context: PaneCommandContext<TState, TActions, TAppState>): unknown | Promise<unknown>
 }
 
 export interface PaneDefinition<
@@ -114,8 +116,35 @@ export interface PaneDefinition<
   actions?(api: PaneActionApi<TState>): TActions
   llm?: {
     description?: string
+    available?(state: TState, context: { appState: PaneApplicationState; pane: PublicPane }): boolean
     selectState?(state: TState, context: { appState: PaneApplicationState; pane: { id: string; title: string; description: string } }): unknown
     commands?: Record<string, PaneCommandDefinition<TState, TActions>>
+  }
+  [key: string]: unknown
+}
+
+export interface PublicPane {
+  id: string
+  title: string
+  description: string
+}
+
+export interface HostPaneDefinition<
+  TAppState extends PlainState = PlainState,
+  TAppActions extends NamedActions = NamedActions,
+  TState extends PlainState = PlainState,
+  TActions extends NamedActions = NamedActions
+> {
+  id: string
+  title?: string
+  description?: string
+  selectState(appState: TAppState, context: { pane: PublicPane }): TState
+  selectActions?(appActions: TAppActions, context: { appState: TAppState; pane: PublicPane }): TActions
+  llm?: {
+    description?: string
+    available?(state: TState, context: { appState: TAppState; pane: PublicPane }): boolean
+    selectState?(state: TState, context: { appState: TAppState; pane: PublicPane }): unknown
+    commands?: Record<string, PaneCommandDefinition<TState, TActions, TAppState>>
   }
   [key: string]: unknown
 }
@@ -131,13 +160,15 @@ export interface PaneRuntimeActions extends NamedActions {
 }
 
 export interface PaneRuntime<
-  TPane extends PaneDefinition<any, any> = PaneDefinition<any, any>
+  TPane extends { id: string } = PaneDefinition<any, any>,
+  TAppState extends PlainState = PaneApplicationState,
+  TAppActions extends NamedActions = PaneRuntimeActions
 > {
-  store: StoreApi<AgentStoreState<PaneApplicationState, PaneRuntimeActions>>
+  store: StoreApi<AgentStoreState<TAppState, TAppActions>>
   commandBus: CommandBus
   panes: TPane[]
   getPane(paneId: string): TPane | undefined
-  getPaneContext(paneId: string, appState?: PaneApplicationState): unknown
+  getPaneContext(paneId: string, appState?: TAppState): unknown
   getModelContext(): unknown
   getToolHandlers(options?: { source?: string }): Record<string, (args?: PlainState) => Promise<CommandResult>>
 }
@@ -151,6 +182,26 @@ export function createPaneRuntime<
   confirmationRisks?: Iterable<string>
   historyLimit?: number
 }): PaneRuntime<TPane>
+
+export function createPaneRuntime<
+  TAppState extends PlainState,
+  TAppActions extends NamedActions,
+  TPane extends HostPaneDefinition<TAppState, TAppActions, any, any> = HostPaneDefinition<TAppState, TAppActions>
+>(options: {
+  store: StoreApi<AgentStoreState<TAppState, TAppActions>>
+  panes: TPane[]
+  selectActivePaneId?(state: TAppState): string
+  switchPane?(paneId: string, context: {
+    source: string
+    state: TAppState
+    actions: TAppActions
+    revision: number
+    getState(): TAppState
+    getRevision(): number
+  }): unknown | Promise<unknown>
+  confirmationRisks?: Iterable<string>
+  historyLimit?: number
+}): PaneRuntime<TPane, TAppState, TAppActions>
 
 export function createCommandBus(options: PlainState): CommandBus
 export function selectData<TData>(state: { data: TData }): TData

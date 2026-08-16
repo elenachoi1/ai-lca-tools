@@ -123,7 +123,10 @@ export const paneDefinitions: SelectionPaneDefinition[] = [
       color: { label: 'Color', values: COLORS, control: 'select' },
       size: { label: 'Size', values: SIZES, control: 'select' }
     },
-    suggestions: ['Set the appearance to blue and large', 'What are my appearance choices?']
+    suggestions: [
+      'Switch to the Response pane and set the answer to Maybe',
+      'Open the Fruit pane and choose Banana'
+    ]
   }),
   createSelectionPane({
     id: 'response',
@@ -133,7 +136,10 @@ export const paneDefinitions: SelectionPaneDefinition[] = [
       answer: { label: 'Answer', values: ANSWERS, control: 'select' },
       boolean: { label: 'Boolean', values: BOOLEAN_VALUES, control: 'select' }
     },
-    suggestions: ['Open the response pane and set the answer to Maybe']
+    suggestions: [
+      'Switch to the Appearance pane and set the color to Blue and size to Large',
+      'Open the Fruit pane and choose Orange'
+    ]
   }),
   createSelectionPane({
     id: 'fruit',
@@ -142,6 +148,9 @@ export const paneDefinitions: SelectionPaneDefinition[] = [
     fields: {
       fruit: { label: 'Fruit', values: FRUITS, control: 'radio' }
     },
-    suggestions: ['Switch to fruit and choose Banana']
+    suggestions: [
+      'Switch to the Appearance pane and set the color to Green and size to Small',
+      'Open the Response pane and set the answer to No and boolean to True'
+    ]
   })
 ]

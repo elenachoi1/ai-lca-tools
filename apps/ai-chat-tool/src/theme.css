@@ -191,6 +191,15 @@ body {
   font-size: 11px;
 }
 
+[data-slot="select-content"] [data-slot="select-item"],
+[data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-item"],
+[data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-checkbox-item"],
+[data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-radio-item"],
+[data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-sub-trigger"] {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .radio-options label {
   border: 1px solid var(--control-outline);
   border-radius: 8px;

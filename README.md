@@ -10,12 +10,15 @@ that the host application explicitly registers.
 apps/
 └── ai-chat-tool/        React application and registered-pane example
 packages/
-└── agent-state/         Zustand store, command bus, and pane runtime
+├── agent-state/         Zustand store, command bus, and pane runtime
+└── chat-react/          Reusable chat component and headless chat hook
 ```
 
 The UI stack is React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui with
 Radix primitives, and Lucide icons. `@ai-lca-tools/agent-state` uses Zustand as
-its state engine and exposes optional React bindings.
+its state engine and exposes optional React bindings. `@ai-lca-tools/chat-react`
+accepts a registered runtime and a host-provided model transport, so provider
+credentials and wire protocols stay outside the reusable UI.
 
 ## How pane access works
 
@@ -44,7 +47,14 @@ become model-accessible until the host registers an `llm` contract for it.
 The example integration point is
 [`apps/ai-chat-tool/src/panes/registry.ts`](./apps/ai-chat-tool/src/panes/registry.ts).
 The reusable API is documented in
-[`packages/agent-state`](./packages/agent-state).
+[`packages/agent-state`](./packages/agent-state) and
+[`packages/chat-react`](./packages/chat-react).
+
+`createPaneRuntime` supports both self-contained example stores and existing
+host-owned stores. A host store supplies explicit pane-state and pane-action
+selectors plus its guarded view-switching action. The chat panel pauses risky
+tool calls for host confirmation and resumes the model loop only after the host
+confirms or rejects them.
 
 ## Get started
 
@@ -95,6 +105,7 @@ npm run dev                 # start the example
 npm run lint                # ESLint for TypeScript and React
 npm run check               # TypeScript and package source checks
 npm test                    # agent-state tests
+npm run test:consumer       # pack and type-check both packages as a consumer
 npm run build               # production app build
 npm run setup:local-mcps    # register the local shadcn MCP where supported
 ```

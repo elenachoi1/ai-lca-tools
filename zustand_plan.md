@@ -294,6 +294,11 @@ Use local package tarballs during integration. After the APIs stabilize, publish
 - Package declarations work for TypeScript consumers.
 - Runtime, confirmation, and tool-definition tests pass.
 
+**Status:** implemented in `@ai-lca-tools/agent-state` and
+`@ai-lca-tools/chat-react`. The package consumer smoke test installs local
+tarballs into an isolated TypeScript fixture. Product-editor changes begin with
+Phase 2 and remain intentionally out of this repository change.
+
 ## Phase 2: Add a Product Editor Store
 
 Install Zustand in `product-graph-editor` and create a domain-specific state directory:

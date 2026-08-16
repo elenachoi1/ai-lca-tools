@@ -7,11 +7,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @ai-lca-tools/ai-chat-tool",
-    "build": "npm run build --workspace @ai-lca-tools/ai-chat-tool",
-    "check": "npm run check --workspaces --if-present",
+    "dev": "npm run build --workspace @ai-lca-tools/chat-react && npm run dev --workspace @ai-lca-tools/ai-chat-tool",
+    "build": "npm run build --workspace @ai-lca-tools/chat-react && npm run build --workspace @ai-lca-tools/ai-chat-tool",
+    "check": "npm run build --workspace @ai-lca-tools/chat-react && npm run check --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "setup:local-mcps": "./scripts/setup-local-mcps.sh",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present && npm run test:consumer",
+    "test:consumer": "node scripts/test-package-consumer.mjs"
   }
 }
