@@ -188,3 +188,411 @@ Automated tests must cover:
 - Tool definition and context generation
 
 The package is complete when its test suite and syntax checks pass independently and its README documents vanilla, React, command, confirmation, and persistence usage.
+
+---
+
+# Product Graph Editor Integration Plan
+
+## Goal
+
+Embed the reusable AI chat in `product-graph-editor` so the assistant can discover registered views, switch between them, read deliberately exposed state, and invoke validated application actions. Human controls and model commands must use the same named Zustand actions.
+
+Zustand will become the shared source of truth only for state used across views or by the assistant. Transient presentation state can remain in React.
+
+```text
+Navbar or view control ─┐
+                        ├─> named Zustand action ─> product editor UI
+LLM tool call ──────────┘
+             ↑
+registered view schema, safe selector, validation, and confirmation
+```
+
+## Principles
+
+- Do not copy the complete AI Chat Tool example into the product editor.
+- Reuse `@ai-lca-tools/agent-state` and an extracted chat component.
+- Keep product-specific pane definitions in `product-graph-editor`.
+- Do not maintain synchronized React and Zustand copies of the same state.
+- Never provide raw Zustand `setState` to the model.
+- Do not automatically expose complete graphs, YAML documents, or LCA results.
+- Preserve all existing unsaved-work, availability, and confirmation rules.
+- Reuse the product editor's existing shadcn components and theme.
+
+## Phase 1: Prepare the Reusable Packages
+
+### Support an Existing Host Store
+
+Extend `@ai-lca-tools/agent-state` so a pane runtime can register an existing host-owned Zustand store instead of always constructing a separate pane store.
+
+The intended API is conceptually:
+
+```ts
+createPaneRuntime({
+  store: productGraphStore,
+  panes: productGraphPanes
+})
+```
+
+Required behavior:
+
+- Continue supporting the current self-contained store mode.
+- Let pane selectors read host application state.
+- Let commands invoke only registered host actions.
+- Preserve validation, revision tracking, confirmations, and audit history.
+- Reject duplicate pane IDs and tool names during startup.
+- Keep raw store mutation outside the command execution context.
+
+### Extract the Chat Component
+
+Create a reusable React component such as:
+
+```tsx
+<AiChatPanel
+  runtime={productGraphRuntime}
+  models={models}
+  transport={transport}
+  storageNamespace="product-graph-editor"
+/>
+```
+
+The reusable component owns:
+
+- Conversation rendering and history
+- Composer and response streaming
+- Model selection
+- Tool-call execution rounds
+- Tool activity and error presentation
+- Stop-response behavior
+
+The host application owns:
+
+- Pane registration
+- Zustand state and named actions
+- Chat placement and visibility
+- Provider transport and credentials
+- Model availability
+- Confirmation UI and policy
+
+The component must not include the example Appearance, Response, or Fruit panes, require a full-page shell, or copy a second set of shadcn primitives into the destination.
+
+### Package Distribution
+
+Target two separately consumable packages:
+
+```text
+@ai-lca-tools/agent-state
+@ai-lca-tools/chat-react
+```
+
+Use local package tarballs during integration. After the APIs stabilize, publish the packages to npm or GitHub Packages. React and Zustand should be peer dependencies where appropriate so the destination does not load duplicate runtime instances.
+
+### Phase 1 Acceptance Criteria
+
+- The existing AI Chat Tool demo still works.
+- A test host can provide its own Zustand store.
+- The chat UI renders independently from the example application shell.
+- Package declarations work for TypeScript consumers.
+- Runtime, confirmation, and tool-definition tests pass.
+
+## Phase 2: Add a Product Editor Store
+
+Install Zustand in `product-graph-editor` and create a domain-specific state directory:
+
+```text
+src/state/
+├── productGraphStore.ts
+├── navigationSlice.ts
+├── graphSlice.ts
+├── workspaceSlice.ts
+├── calculationSlice.ts
+└── selectors.ts
+```
+
+The implementation may start in one file. The important boundary is the public state and named action API, not the number of files.
+
+### First State to Migrate
+
+Move the simplest shared state first:
+
+- Active application view
+- Selected graph node ID
+- Graph mode
+- Graph orientation
+- Graph connection style
+- Reference-amount visibility
+- Calculation status
+- Current-result availability and revision
+- Active document metadata
+- Result filters and selections shared across views
+
+Define named actions such as:
+
+```ts
+actions.requestViewChange(view)
+actions.selectNode(nodeId)
+actions.clearNodeSelection()
+actions.setGraphMode(mode)
+actions.setGraphOrientation(orientation)
+actions.startCalculation()
+actions.completeCalculation(result)
+actions.failCalculation(error)
+```
+
+Human controls must use these actions before any model commands are connected.
+
+### State That Can Remain Local Initially
+
+- Open dropdown and dialog state
+- Temporary dialog input
+- Hover and animation state
+- Table column widths
+- File input elements and DOM refs
+- React Flow viewport state
+- Abort controllers and active stream readers
+
+React Flow nodes and edges may stay in the existing React Flow hooks initially. Store shared selection and display settings in Zustand. Move the complete graph only if model-driven graph editing requires a store-owned graph.
+
+### Preserve Guarded Navigation
+
+The product editor already protects view changes when work is unsaved. Both human navigation and model commands must go through the same request path:
+
+```text
+Tab click ──────┐
+                ├─> requestViewChange ─> guard/confirmation ─> state update
+LLM switch tool ┘
+```
+
+A model command must not directly assign the active view and bypass existing safeguards.
+
+### Phase 2 Acceptance Criteria
+
+- Existing human interactions behave the same after migration.
+- Zustand is the only source of truth for each migrated value.
+- No effects synchronize duplicate React and Zustand values.
+- Unsaved-work protections still apply.
+- Narrow selectors prevent unrelated view rerenders.
+
+## Phase 3: Register Product Editor Views
+
+Add an AI integration directory in the destination:
+
+```text
+src/ai/
+├── paneRegistry.ts
+├── paneRuntime.ts
+├── modelConfig.ts
+└── transport.ts
+```
+
+Register these application views:
+
+- Graph
+- Editor
+- Results
+- Inventory
+- Impact Analysis
+- Process Results
+- Contributions
+- Sankey
+
+Each pane registration must define its model-facing description, availability rules, safe state selector, validated commands, and risk policy.
+
+### Graph Pane
+
+Expose a bounded summary such as:
+
+```ts
+{
+  activeModelTitle,
+  selectedNodeId,
+  selectedNodeSummary,
+  nodeCount,
+  connectionCount,
+  graphMode,
+  graphOrientation
+}
+```
+
+Candidate commands:
+
+- `select_graph_node`
+- `clear_graph_selection`
+- `set_graph_mode`
+- `set_graph_orientation`
+- `focus_graph_view`
+
+Do not expose the complete graph unless a specific workflow requires it.
+
+### Editor Pane
+
+Expose document metadata rather than the full YAML by default:
+
+```ts
+{
+  documentTitle,
+  hasUnsavedChanges,
+  yamlIsValid,
+  appliedRevision
+}
+```
+
+Candidate commands:
+
+- `open_editor`
+- `save_document`
+- `calculate_current_model`
+
+Editing or replacing YAML should not be part of the first integration. When added, it must require confirmation and revalidation.
+
+### Result Panes
+
+Expose summarized result state:
+
+```ts
+{
+  resultsAvailable,
+  calculationStatus,
+  selectedImpactCategory,
+  selectedProcess,
+  selectedFlow
+}
+```
+
+Candidate commands:
+
+- `select_impact_category`
+- `select_result_process`
+- `select_inventory_flow`
+- `set_sankey_orientation`
+
+Analysis panes must be unavailable until a current calculation exists, matching the existing disabled-view behavior.
+
+### Command Risk Policy
+
+| Action | Suggested risk |
+|---|---|
+| Read registered state | `read` |
+| Switch view | `ui` |
+| Change a display setting | `ui` |
+| Select a node or result | `ui` |
+| Start a calculation | `mutation` |
+| Edit YAML | `mutation` |
+| Replace a document | `mutation` |
+| Delete a model | `destructive` |
+| Download or export | `external` |
+
+Mutation, destructive, and external actions should use host-controlled confirmation.
+
+### Phase 3 Acceptance Criteria
+
+- Only registered panes appear in model context.
+- Each selector returns only its documented safe projection.
+- Unavailable analysis views cannot be opened through a tool call.
+- Invalid command arguments cannot mutate state.
+- Commands use the same actions as human controls.
+
+## Phase 4: Embed the Chat Panel
+
+Mount the chat as a product-editor feature rather than replacing its shell.
+
+Recommended placement:
+
+- Collapsible right-side panel on desktop
+- Full-height drawer on narrow screens
+- Navbar control to open and close the chat
+
+Reuse the destination's existing `Button`, `Dialog`, `Select`, and other shadcn components. The graph must resize or refit correctly when the chat panel opens and closes.
+
+Configure the initial model list as:
+
+```ts
+[
+  ['openai/gpt-4o-mini', 'GPT-4o mini'],
+  ['openai/gpt-5.6-luna', 'GPT-5.6 Luna']
+]
+```
+
+### Phase 4 Acceptance Criteria
+
+- Opening the chat does not obscure required graph controls.
+- The graph responds correctly to available-width changes.
+- The chat is keyboard accessible.
+- Responsive behavior works at existing test breakpoints.
+- The model chooser appears only in the chat navbar.
+
+## Phase 5: Secure the Model Transport
+
+The local example may accept an OpenRouter key in browser storage, but a production product editor should proxy provider requests through a backend:
+
+```text
+Browser chat
+    ↓
+product-graph-editor backend
+    ↓
+OpenRouter
+```
+
+The backend should:
+
+- Hold provider credentials
+- Restrict allowed models
+- Apply authentication and rate limits where appropriate
+- Stream responses to the browser
+- Avoid logging secrets or unnecessary application context
+
+The browser executes registered UI tools locally after the tool call passes runtime validation and any required confirmation.
+
+## Phase 6: Verification
+
+### Store Tests
+
+- Named actions update expected state.
+- Invalid views and node IDs are rejected.
+- Result views cannot open without current results.
+- Unsaved-document rules cannot be bypassed.
+- Selectors return stable, minimal projections.
+
+### Pane Runtime Tests
+
+- Only registered panes are listed.
+- Only selected safe state reaches model context.
+- Unregistered state cannot be read or changed.
+- Invalid tool arguments do not mutate state.
+- Risky actions require confirmation.
+- Human and model actions produce identical store updates.
+
+### Component and Integration Tests
+
+- Chat opens, closes, streams, and stops correctly.
+- Model selection works.
+- Tool calls and failures render clearly.
+- Switching Graph to Editor activates the Editor view.
+- Inventory switching is rejected before calculation.
+- Inventory switching succeeds after calculation.
+- Selecting a graph node updates the inspector.
+- Critical scenarios pass at desktop and mobile sizes.
+
+## Recommended Pull Request Sequence
+
+1. **Agent-state host-store support** — reusable API and unit tests.
+2. **Reusable chat component** — extract UI without product-specific state.
+3. **Product editor Zustand foundation** — navigation, selection, display settings, and calculation metadata.
+4. **Product editor pane registry** — safe selectors, view switching, and registered actions.
+5. **Embedded chat panel** — layout, accessibility, and responsive behavior.
+6. **Production model proxy** — backend transport and credential handling.
+7. **Integration tests** — mocked tool calls and responsive workflows.
+
+Each pull request should remain independently testable and preserve current product-editor behavior.
+
+## Definition of Done
+
+The integration is complete when:
+
+- Zustand is the only source of truth for shared AI-accessible state.
+- Human controls and model tools use the same named actions.
+- Every model-accessible view is explicitly registered.
+- Unregistered state remains inaccessible.
+- Result-view availability and unsaved-work protections cannot be bypassed.
+- The reusable chat contains no product-specific business logic.
+- Provider credentials are not shipped to production browsers.
+- Unit, integration, responsive, and production-build checks pass.
