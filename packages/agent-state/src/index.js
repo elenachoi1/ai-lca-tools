@@ -8,6 +8,8 @@ export {
 
 export { createCommandBus } from './createCommandBus.js'
 
+export { createPaneRuntime } from './createPaneRuntime.js'
+
 export {
   createBrowserJSONStorage,
   createMemoryJSONStorage,

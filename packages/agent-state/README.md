@@ -2,7 +2,7 @@
 
 `@ai-lca-tools/agent-state` is a small, reusable bridge between application state, UI panels, and LLM tool calls. It uses a vanilla Zustand store so the same state can be consumed by React, other UI frameworks, services, and tool handlers.
 
-The package is intentionally domain-neutral. Product graphs, retail controls, dashboards, editors, and other applications provide their own state, named actions, validation, and tool definitions.
+The package is intentionally domain-neutral. Product graphs, application panes, dashboards, editors, and other applications provide their own state, named actions, validation, and tool definitions.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ An LLM never receives Zustand's raw `setState`. Command handlers receive only th
 
 ## Create a store
 
-```js
+```ts
 import { createAgentStore } from '@ai-lca-tools/agent-state'
 
 export const appStore = createAgentStore({
@@ -53,9 +53,9 @@ Every successful data update increments `state.meta.revision`. The command confi
 
 React support is a separate export, so non-React consumers do not load React dependencies.
 
-```jsx
+```tsx
 import { createStoreHook } from '@ai-lca-tools/agent-state/react'
-import { appStore } from './appStore.js'
+import { appStore } from './appStore'
 
 const useAppStore = createStoreHook(appStore)
 
@@ -73,11 +73,85 @@ function ResultsPanel() {
 
 Use narrow selectors so streaming messages or other frequent state changes do not rerender unrelated panels.
 
-## Create an LLM command bus
+## Register application panes
+
+`createPaneRuntime` is an optional layer for applications composed from tabs,
+panels, pages, or other switchable panes. The application registers all panes
+at startup. Only panes with an explicit `llm` object are visible to the model.
+
+```ts
+import { createPaneRuntime } from '@ai-lca-tools/agent-state'
+
+const runtime = createPaneRuntime({
+  initialActivePaneId: 'results',
+  panes: [
+    {
+      id: 'results',
+      title: 'Results',
+      description: 'Calculated result filters.',
+      initialState: { category: 'climate' },
+
+      actions: ({ set }) => ({
+        setCategory: category => set({ category })
+      }),
+
+      llm: {
+        // This is the only state from this pane that enters model context.
+        selectState: state => ({ category: state.category }),
+        commands: {
+          set_result_category: {
+            description: 'Set the visible result category.',
+            parameters: {
+              type: 'object',
+              properties: {
+                category: { type: 'string', enum: ['climate', 'water'] }
+              },
+              required: ['category'],
+              additionalProperties: false
+            },
+            risk: 'ui',
+            validate: args => args,
+            execute: ({ category }, context) => {
+              context.actions.setCategory(category)
+              return { category: context.getState().category }
+            }
+          }
+        }
+      }
+    },
+    {
+      id: 'private-notes',
+      title: 'Private notes',
+      initialState: { text: '' }
+      // No `llm` contract: the model cannot list, read, switch to, or edit it.
+    }
+  ]
+})
+```
+
+The runtime supplies three core tools according to the registered contracts:
+
+- `list_panes` lists only LLM-enabled panes.
+- `switch_pane` switches only to an LLM-enabled pane.
+- `get_pane_state` reads only panes with an explicit `selectState`.
+
+Pane-specific commands are merged with those tools and checked for name
+collisions at startup:
 
 ```js
+const tools = runtime.commandBus.getToolDefinitions()
+const handlers = runtime.getToolHandlers()
+const safePromptContext = runtime.getModelContext()
+```
+
+UI controls use the same named actions through `runtime.store`. React hosts can
+bind it with `createStoreHook` from `@ai-lca-tools/agent-state/react`.
+
+## Create an LLM command bus
+
+```ts
 import { createCommandBus } from '@ai-lca-tools/agent-state'
-import { appStore } from './appStore.js'
+import { appStore } from './appStore'
 
 export const commandBus = createCommandBus({
   store: appStore,
@@ -116,7 +190,7 @@ export const commandBus = createCommandBus({
 
 Send `commandBus.getToolDefinitions()` to a model that accepts OpenAI-compatible function definitions. Execute a returned function call with:
 
-```js
+```ts
 const result = await commandBus.execute(toolName, parsedArguments)
 ```
 
@@ -126,7 +200,7 @@ The result is structured as `completed`, `confirmation_required`, or `error`.
 
 Commands with a risk of `mutation`, `external`, or `destructive` require confirmation by default:
 
-```js
+```ts
 delete_record: {
   description: 'Delete a record.',
   risk: 'destructive',
@@ -142,7 +216,7 @@ delete_record: {
 }
 ```
 
-```js
+```ts
 const proposal = await commandBus.execute('delete_record', { id: '42' })
 
 // Present proposal.confirmation.summary in host-controlled UI.
@@ -157,7 +231,7 @@ The host can reject a pending command with `commandBus.reject(id)`. Pending conf
 
 Persistence requires an explicit selector. This prevents the default behavior from accidentally writing messages, credentials, errors, or other transient state.
 
-```js
+```ts
 import {
   createAgentStore,
   createBrowserJSONStorage
@@ -210,8 +284,11 @@ It deliberately does not contain `setState`.
 ## Development
 
 ```bash
-cd packages/agent-state
 npm install
 npm test
 npm run check
 ```
+
+The package implementation remains plain ESM JavaScript for broad runtime
+compatibility. Bundled declaration files provide TypeScript consumers with the
+public store, command bus, pane runtime, persistence, and React binding types.

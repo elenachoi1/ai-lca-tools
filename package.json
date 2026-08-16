@@ -1,0 +1,17 @@
+{
+  "name": "ai-lca-tools",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @ai-lca-tools/ai-chat-tool",
+    "build": "npm run build --workspace @ai-lca-tools/ai-chat-tool",
+    "check": "npm run check --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "setup:local-mcps": "./scripts/setup-local-mcps.sh",
+    "test": "npm run test --workspaces --if-present"
+  }
+}

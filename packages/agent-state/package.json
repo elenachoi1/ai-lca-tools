@@ -3,18 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "types": "./src/index.d.ts",
   "description": "Framework-agnostic Zustand state and validated command bridge for agent-driven interfaces",
   "files": [
     "src",
     "README.md"
   ],
   "exports": {
-    ".": "./src/index.js",
-    "./react": "./src/react.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./react": {
+      "types": "./src/react.d.ts",
+      "import": "./src/react.js"
+    }
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/createAgentStore.js && node --check src/createCommandBus.js && node --check src/storage.js && node --check src/react.js && node --check src/index.js"
+    "check": "node --check src/createAgentStore.js && node --check src/createCommandBus.js && node --check src/createPaneRuntime.js && node --check src/storage.js && node --check src/react.js && node --check src/index.js"
   },
   "dependencies": {
     "zustand": "^5.0.8"
